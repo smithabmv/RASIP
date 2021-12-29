@@ -1,0 +1,685 @@
+---
+title: IPRAS-1 FHAS- Error reporting from S3M/ISCLK into RASIP (wired input)
+author: Smitha BMV
+classification: IC
+...
+
+IPRAS-1 FHAS - Error Reporting from S3M/ISCLK into RASIP 
+
+
+<!--
+NOTE: this is a comment in the MMD file that will not show up in the HTML file.
+You can keep this text in the file to help you write your doc
+Commented text will be green in Visual Studio Code
+-->
+
+<!--
+How to Use This Template
+
+Do not remove any headings from this document. If you do not need the headings to describe the feature, enter "**Not applicable to this** feature" under the heading. This lets the reader know that we did not overlook this topic.
+
+In the specification that follows, add new headings that you need to fully describe the architecture of this IP. Add your new headings in the appropriate chapters after the topics that are already included in this Template.
+
+**Notes**
+
+- Text within comments (see above) in this specification contains instructions for filling out the section where it appears.
+- If a section is not relevant, do not remove it, instead replace the Gap text with the phrase "Not applicable to this feature"
+- For consistency and convenience, "**FIXME: Not applicable to this feature.**" is pre-stated in every section.  ProMark automatically tracks "FIXME" as action items
+-->
+
+# About this Document
+
+This document contains all architecture information necessary for the IP design and validation teams to implement the feature. This document is for internal IP development use only and is not intended to be released outside of the IP development organization.
+
+ Once the feature transitions from architecture investigation phase to execution investigation phase, the contents of this feature HAS are locked, and are not allowed to be changed without tracked request from execution investigation. Once the feature becomes a planned feature, the content should be ported to the corresponding IP HAS. Once the content is ported, this document should be marked "Obsolete, move to IP HAS" in the title page, and the IP HAS becomes the controlling document.
+
+This document should be as self-contained as reasonably possible. No other spreadsheets, PowerPoint, email, HSDs/JIRAs should be necessary to fully understand the architecture of this feature.
+
+The document describes exactly one feature or a group of features that are tightly coupled.
+
+## Audience
+
+The information in this document is intended to be used by the developers of this feature. This document is not intended to be released outside the IP development organization. End-users of this IP should refer to the IP Data Sheet and IP Technical Reference Manual (TRM).
+
+## Terminology
+
+List new or unusual terminology used in this document.
+
+| Term | Definition |
+| :--- | :--------- |
+| BIOS | Basic Input/Output System |
+| FW   | Firmware |
+| SW   | Software |
+| MMIO | Memory Mapped Input/Output |
+| RO   | Read Only |
+| RW   | Read Write |
+| SCI  | System Correctable Interrupt|
+| UCR  | Micro Control Register | 
+
+## References
+
+|Title|Revision|Link/Location|
+|:------|:------|:---------|
+|Gen4 RASIP|NA|[https://goto/RASIP](https://goto/RASIP)|
+|IPRAS-1|NA|[https://jira.devtools.intel.com/browse/IPRAS-1](https://jira.devtools.intel.com/browse/IPRAS-1)|
+|REf document|NA|[https://wiki.ith.intel.com/display/PCHLESS/Self-boot+RAS+and+Error+Reporting](https://wiki.ith.intel.com/display/PCHLESS/Self-boot+RAS+and+Error+Reporting)|
+|PCH less Error Reporting Ref document|NA|[https://wiki.ith.intel.com/display/PCHLESS/Error+logging+and+harvestation](https://wiki.ith.intel.com/display/PCHLESS/Error+logging+and+harvestation)
+
+
+## Reviewers
+
+The following stakeholders are reviewers for this feature HAS:
+
+| Role | Name | Completed |
+| ---- | --------- | ---- |
+| IP Product Owner |  Krishnan Subramoniam  | |
+| IP Execution Lead |Krishnan Subramonian/Sathish Sugumaran | |
+| IP Support Lead |   | |
+| IP FW Arch Lead |Nick Adams | |
+| IP FW Execution Lead |James R. Goffena | | 
+| Post-si Stakeholder |Neil Atchman | |
+| Globals Architects-Reset/Clock |Vicky P. Duerk | |
+| Globals Architects-PM |Keith Klayman | |
+| Globals-Architects-Security | Vicky P. Duerk| | 
+| Globals-Architects DFD | Kevin Safford| |
+| Globals-Architects(IPAG) RAS |Smitha Bmv | |
+| IP Micro-arch and Design|Santosh Nene,Samuel Ho||
+| IP Design |Prithveesh Moger, Amit Namdeo, Bhavna Agrawal||
+| IP Validation | Abhi, Shashi, Parth||
+| Prod Arch - RAS |Karthik Anantanarayanan||
+
+# Feature Overview
+
+This requirement is to have support to have S3M/ISCLK error reporting into RASIP from Gen4 onwards.This was handled differently in legacy  through punit until Gen3. 
+
+## Motivation for the Feature
+A unified and a central place for all IP's to report the errors On any parition and have a error reporting/escalation path.
+
+Parition here refers to the subsocket (hard partitioning) or domain (soft -partitioning) which are boot time configured.
+
+RASIP from Gen4 onwards will be supporting the Wired input Error reporting from S3M Bacon and S3M Secon.
+
+## Summary of the Feature Requirements
+
+The feature requires RASIP to have the following to support the feature and the corresponding flows in any usage model.
+
+* Wire based signalling into RASIP from gen4 onwards.
+
+* S3M Bacon - Self boot Personality of S3M
+    Self-boot logs and reports the detected errors via system event generations. In the context of error reporting, a system event is an event that notifies the system of the error. There is only one type possible in a self-boot domain of the CPU
+    
+    An NMI or SMI to the CPU
+    
+    CPU responds to a system event and takes the appropriate action to handle the error. An external agent such as BMC may monitor the health of FPGA Platform Controller and interrupt the Host CPU. In some severe error cases, when the CPU is no longer responding to system events resulting from an error(s), the PCH shall notify the BMC for possible error log recovery and then perform a reset to recover the PCH functionality.
+
+    Possible reporting into RASIP in this personality of S3M: 
+    * UNCORRECTABLE_AER to SOC IEH for subtractive service for P2SB stack
+    * DO_SERR is forwarded to SOC IEH always unless explicitly programmed into Legacy mode 
+
+
+The Error from S3M-Secon and S3M -HW (units -links and other pieces) - early boot error, shall be logged into the MCA bank of RASIP with associated MCCOD and MC STATUS details like legacy except for the logging in RASIP.
+
+* This needs to be denoted as MCERR and CATERR# pin assertion to be done for the early boot errors.
+
+* Can be reported to Error Handler(IO /MCA) configured mode of RASIP.
+
+* All the Early error registers will be visible to SW/BIOS and will be cleared by SW.
+
+*ISCLK also will be reporting its error into the same wire from SOC .
+
+
+
+
+## Summary of the Feature Impact
+
+
+| Category                  | Impact (High, Medium, Low, None) |
+| :------------------------ | :------------------------------- |
+| Interface                 | Yes                             |
+| Area                      | Medium                              |
+| Power                     | None                             |
+| Performance               | None                             |
+| Timing                    | Low                            |
+| Reset                     | None                             |
+| Configurations            | Yes                             |
+| Power Management          | None                             |
+| Security                  | Low                             |
+| Registers                 | Low                              |
+| Software/Firmware         | Low                              |
+| Specifications (Internal) | Low                              |
+| Specifications (External) | Low                              |
+| Debug                     | Low                              |
+| RAS                       | Yes                             |
+
+## Impact to Specifications
+
+This is a  feature refactored from Gen4 onwards and does affect the old specifications of this IP. This feature does  change any specifications beyond the RASIP.
+
+<!--**FIXME: Not applicable to this feature.**
+-->
+# Feature Details
+
+This chapter describes the feature and its architecture in details. 
+
+<!--
+Put in as many sections as needed to clearly state what needs to be implemented.
+-->
+
+## Feature Descriptions
+
+This feature supports the Error reporting for all the IP's into RASIP in whatever configuration RASIP is present to have the wired input error being reported and escalated on being enabled for transmission as a Uncorrectable MCERR  error .
+
+This error will be finally indicated on IERR Network since it comes under Early error category.
+
+This fatal will still be a condition for CATERR# for maintaining the BIOS trace path, 
+
+
+## Feature Block Diagrams
+
+The block diagram captures the wired error reporting.
+
+
+![](assets/S3M.PNG)
+
+
+
+
+## Use Case Descriptions
+
+### Legal Usage
+
+Not applicable to this feature.
+
+### Illegal Usage.
+
+Not applicable to this feature.
+
+### Undefined or Unsupported Usage
+
+Not applicable to this feature.
+
+### Misc info
+
+![](assets/MCCOD.PNG)
+
+The common definition of the category of Errors is as follows for reference understanding :
+
+In an integrated boot domain context, errors can be classified as two types: Uncorrectable errors and Correctable errors. This classification separates those errors resulting in functional failures from those errors resulting in degraded performance. Uncorrectable errors can further be classified as Fatal or Non-Fatal. Classification of error severity as Fatal, Nonfatal and Correctable provides the platform with mechanisms for mapping the error to a suitable handling mechanism. Each severity can trigger a system event according to the mapping defined by the System Event Map register. This mechanism provides the software the flexibility to map an uncorrectable error to the suitable error severity. For example, a platform may choose to map an uncorrectable ECC error as nonfatal error while another platform design may require mapping the same error to a fatal error. The mapping of the uncorrectable error is set to a default mapping at power-on. The software/firmware can choose to alter the default mapping after power-on.
+
+* Correctable Errors.
+
+Hardware correctable errors include those error conditions where the system can recover without any loss of information. Hardware corrects these errors and no software intervention is required. For example, a Link CRC error which is corrected by Data Link Level Retry is considered a correctable error. 
+
+Error is corrected by the hardware without software intervention. System operation may be degraded but its functionality is not compromised.
+Correctable error may be logged and reported in a implementation specific manner: Upon the immediate detection of the correctable error, or Upon the accumulation of errors reaching to a threshold
+
+* Fatal Errors.
+
+Fatal errors are uncorrectable error conditions which render the FPGA Platform Controller hardware unreliable. For fatal error, inband reporting to the CPU is still possible. A reset may be required to return to reliable operation.
+
+System integrity is compromised and continued operation may not be possible
+System interface is compromised and Inband reporting may be possible.
+e.g. Uncorrectable tag error in cache, or Permanent PCIe link failure.
+Requires immediate logging and reporting of the error to CPU. 
+
+* Nonfatal Errors.
+
+Nonfatal errors are software correctable or software/hardware uncorrectable errors which cause a particular transaction to be unreliable but the system hardware is otherwise fully functional. Isolating nonfatal from fatal errors provides system management software the opportunity to recover from the error without reset and disturbing other transactions in progress. Devices not associated with the transaction in error are not impacted by the error. An example of recoverable error is an ECC Uncorrectable error that affects only the data portion of a transaction.
+
+Error could not be corrected by hardware and may require software intervention for correction.
+Or error could not be corrected. Data integrity is compromised, but system operation is not compromise.
+Requires immediate logging and reporting of the error to CPU and OS/Firmware takes the action to contain the error.
+
+* Software Correctable Errors
+
+Software correctable errors are considered as “recoverable” error. These errors include those error conditions where the system can recover without any loss of information. Software intervention is required to correct these errors.
+
+Requires immediate logging and reporting of the error to CPU
+Firmware or other system software layers take corrective actions.
+Data integrity is not compromised with such errors.
+
+S3M Secon 
+The goal of this section is to explain the following - 
+
+Error logging and signaling from S3M IP and error handling by CPU-North-L.
+Error logging and signaling from different blocks inside S3M (ARC uC, CSE, SBLink Parity etc) and error handling by S3M IP. 
+The basic idea is to aggregate all the errors from different error sources inside S3M IP and forward them out as a single S3M error to the Punit MCA bank over a wire (S3M_Error) where subsequent logging and signaling takes place. Inside the IP,  comprehensive registers are maintained that have been categorized into hardware errors and firmware errors. Errors are further classified as Fatal, Non-fatal and Correctable errors in each category. While we only forward fatal errors to the Punit MCA bank for logging and signaling the CATERR#, we log all kinds of error in the internal S3M IP registers which are exposed to the TAP controller for debug purposes. NVRAM authentication errors (specific kind of FW errors) happen much earlier in the reset flow and will only cause the respective flow to hang. These errors will be logged in the internal S3M registers but will not cause any signaling. 
+
+General MCA error handling flow:
+Any IP which is in MCA domain has an MCA bank of its own for logging errors. This IP sends an MCA_msg to the RASIP over sideband. RASIP sends another error indication to the cores which eventually raise an exception.  In parallel, RASIPalso drives an IERR on CATERR#. More details on the MCA error handling can be found here.
+
+RASIP is one of the IPs in MCA domain. Errors are logged in its MCA bank. As mentioned above, it sends U2C : MCA_msg to over sideband and also triggers IERR on CATERR#. During the reset flow, RASIP comes up in reset phase 3 and Sideband doesn't come up until reset phase 4/5. Since RASIP has a way of signaling an error over CATERR# internally, it can do so without Side band being operational if pin owner, else the sideband on every die needs to be up for the pin assertion also 
+
+S3M is not directly in the MCA domain. It does not have an MCA bank of its own, however as mentioned above, it uses RASIP's MCA bank to log and signal its errors.Also, S3M is involved in the Multi Socket boot flow, which spans over reset phases 3 and 4. Any error which occurs during this phase will assert the S3M_Error wire which goes to the RASIP MCA bank. When RASIP becomes operational in reset phase3 , and since the error wire from S3M IP will still hold a value of 1, error is logged in the Punit MCA bank and a subsequent IERR on CATERR# pin is asserted. MCA logging details for S3M are stated above.
+
+
+## Cross IP Dependencies
+
+Not applicable to this feature.
+
+<!--**FIXME: Not applicable to this feature.**
+-->
+## Cross Feature Dependencies 
+
+S3M/ISCLK wire reporting needs to be connected to RASIP on every die .
+
+Both Bacon and Secon personalities flows needs to be supported on the Error Reporting .
+
+<!--
+**FIXME: Not applicable to this feature.**
+-->
+
+## Specification Change Details
+
+# Interface Changes
+
+Not applicable to this feature.
+
+<!--
+**FIXME: Not applicable to this feature.**
+-->
+
+## Voltage Domains
+
+<!--If the feature added any voltage domains, document it here. If not, document what voltage domain the feature logic is expected to reside in.
+-->
+
+The single voltage domain the RASIP is defined is in Vinf/VAon.
+
+<!--
+**FIXME: Not applicable to this feature.**
+-->
+
+## Clocking
+
+<!--
+If the feature added any clock domains, document it here. If not, document what clock domain the feature logic is expected to reside in.
+
+**FIXME: Not applicable to this feature.**
+-->
+
+
+## Straps
+
+<!--Describe straps added to the IP due to this feature. Clearly documents the sampling point of the straps required by the IP -->
+<!--
+**FIXME: Not applicable to this feature.**
+-->
+Asynchronous Wired error input strap is an addition due to this feature.
+
+
+## Parameters
+
+No additional parameters added.
+
+
+<!--
+**FIXME: Not applicable to this feature.**
+-->
+
+## Interface signals 
+
+
+  ```aces("ip_interface", "RASIP Globals", acesfname="rasip_interface_v1.xlsx", title="RASIP wired interface", infokeyspan=2, hide=".Strap?, .Required?, .Condition, .Tie-off Value, .Isolation Value, .Reset Domain, .Reset Value, .Sample/Drive Edge, .Power Domain, .Strap Type, .Discovery, .Tie-off/Isolation Value, Reset Domain, Clock Name")
+```
+
+ip_rasip_wired_ras_error_assertin is the one used for this feature in the above table.
+
+# Resets
+
+IP early phase S3 reset is used here , single reset domain only.
+
+<!--escribe the resets used for the feature logic. Describe if it's a new reset domain for the IP. If new registers are defined, describe if the registers are on sticky or non-sticky reset domains.
+
+If there are changes to reset flows (cold reset, warm reset, etc) list out the changes here.
+
+**FIXME: Not applicable to this feature.**
+-->
+
+# Configuration 
+
+No additional configurations for the error reporting paths 
+
+<!--
+Describe any initialization and/or configuration/programming needed for the feature. State if the configurations/programming is boot time or run time or both.
+
+**FIXME: Not applicable to this feature.**
+-->
+
+## Feature Enabling and Disabling
+
+This feature cannot be disabled. But this feature does not effect any other IP or feature and hence does not even needs to be enabled and/or disabled.
+
+## Method of Configuration Changes
+
+Boot time configuration only
+
+
+
+<!--
+When can configurations related to this feature be changed?  Boot time only? Run time quiesc'ed state, Run time non-quiesc'ed state?
+
+Is warm reset required after reconfiguration of this feature?
+-->
+
+## Legal Configuration Space
+
+## Illegal Configurations Space
+
+ Not applicable to this feature
+
+## Undefined Configuration Space
+
+ Not applicable to this feature
+
+## Configuration Interactions With Other Features
+
+ Not applicable to this feature
+
+# Performance and Power
+
+ Not applicable to this feature.
+
+## Latency impact
+
+<!--Example questions to answer for this section:
+
+* What's the lower bound of latency in an unloaded system (pipeline stages)?
+* Any upper bound of latency or timeout for this feature?
+* Any fairness or starvation threshold set for this feature?
+-->
+
+Not applicable to this feature.
+
+## Bandwidth impact
+
+<!--Example questions to answer for this section:
+
+* What's the upper bound of bandwidth of this IP when this feature is enabled?
+* What's the target efficiency?
+-->
+
+Not applicable to this feature.
+
+## Power impact
+<!--
+Example questions to answer for this section:
+
+* Can this feature be disabled? 
+* Can the power be shut off or clock gated when this feature is disabled? 
+-->
+
+Not applicable to this feature.
+
+# Reliability, Availability, and Serviceability (RAS)
+
+
+<!--
+Describe any RAS impact.
+
+Does the feature add any error input interface to the IP? If so does it have error logging masking capability?
+
+Does the feature add any error output interface from the IP?
+
+Does this feature introduce new fabric related parity errors?
+
+Does this feature add any non-OS visible IP interface?  If yes, a definition of the IP reporting mechanism needs to be defined.
+
+Does this feature add real time requirement to the IP? If so is it using the global time keeper IP? If yes, document the time sync error as output of the IP?
+
+Document any firmware escalation requirement on errors.
+
+Does this feature add any low latency wired indication by the system (IERR, Viral)
+
+Does the feature introduce any time out conditions?
+
+Does the feature introduce additional Unexpected Completion/Unexpected Response reception errors?
+
+Does the feature introduce any overflow/internal errors?
+
+Does the feature introduce correctable category of Errors if any like Advisory Non-fatal errors?
+-->
+
+Time sync errors are essentially parity errors 
+
+## Errors
+<!--
+| Error Name | Error Type/Severity | Description |
+| :--------- | :------------------ | :---------- |
+| time sync errors          | fatal                    |  Fatal error indication and requires to be indicated as uncorrectable and will result in a GTK reset , BIOS takes action .           |
+| -          |                     |             |
+
+Reference MCA error types below
+
+
+IA32 MCA Error Types:
+
+| Error Type            | UC   | PCC  | S    | AR   | Signal | Software Action                                                                                   |
+| :-------------------- | :--- | :--- | :--- | :--- | :----- | :------------------------------------------------------------------------------------------------ |
+| Uncorrected Error(UC) | 1    | 1    | x    | x    | MCE    | Reset the system                                                                                  |
+| SRAR (SW Recoverable) | 1    | 0    | 1    | 1    | MCE    | for known MCAOD, take specific recovery action; for unknown MCACOD, must bug check                |
+| SRAO (SW recoverable) | 1    | 0    | 1    | 0    | MCE    | for known MCAOD, take specific recovery action; for unknown MCACOD, OK to keep the system running |
+| UCNA                  | 1    | 0    | 0    | 0    | CMC    | log the error and OK to keep the system running                                                   |
+| Corrected Error (CE)  | 0    | x    | x    | x    | CMC    | log the error and no corrective action required                                                   |
+
+-->
+
+ Not applicable to this feature.
+
+## Aborts
+
+<!--Does this feature introduce any new abort flows? If so define the abort flows.
+-->
+
+Not applicable to this feature.
+
+# Power Management
+
+<!--escribe how the new feature fit into the existing power management infrastructure.
+
+If the feature introduces new power management requirement, list them here.
+-->
+
+Not applicable to this feature.
+
+# Security and Access Control
+
+<!--valuate if this feature has any security impact.  If the feature has security impact, evaluate if an S1 is needed. (Refer to the SDLe entry of the IP for a list of S1 questions.)
+
+If the feature holds the security keys, telemetry and power manipulations need to be prevented. List out any requirement here.
+-->
+
+Table: Security policy for register
+
+| register name   | SAI_POLICY |
+| :------------ | :-------- |
+
+<!--**FIXME: Not applicable to this feature.**-->
+
+## List of Assets
+
+No new assets introduced by this feature. Not required : security objectives and attack/threat models.
+
+<!--**FIXME: Not applicable to this feature.**-->
+
+## SAI/Policy Group
+
+No new SAI and/or Policy groups introduced by this feature.
+
+<!--**FIXME: Not applicable to this feature.**-->
+
+# Debug
+
+<!--This reference applies only to non-DFD/DFT infrastructure IPs
+
+## Feature DFD Overview and Strategy
+
+Briefly describe how this feature will be debugged in post-silicon (in other words, which debug capabilities are intended to be used). Summarize the key debug changes within the IP as a result of including this feature.
+
+## Control and Observation Interface Changes
+
+Point to section 4.5 and make sure i/f changes are documented.
+
+**FIXME: Not applicable to this feature.**
+
+## List of Recommended Observability Signals
+
+**FIXME: Not applicable to this feature.**
+
+## Use Models
+
+Describe all use models of any new debug capability introduced by this feature.
+
+Describe all impacts on existing debug use models for any changed debug capability as a result of this feature.
+
+## Debug Power Domains and Clocks
+
+Note: questions in this section are relative to the definitions of the IP without the feature, as documented in the IP HAS. In most cases, these questions likely are answered "no". If yes, please elaborate with details on how the feature change impacts this area.
+
+Does this feature change the the power rails required for debug operation within this IP?
+
+Does this feature change the clocks by interface name required for debug operation within this IP?
+
+Does this feature change the strategy for autonomous power gate support when debug logic is active in this IP?
+
+Does this feature change the strategy for clock gating support when debug logic is active in this IP?
+
+Does this feature change any cases where power states impact access to debug configuration in this IP?
+
+Does this feature significantly change in power consumption with and without debug enabled, based on estimates of Cdyn differences and/or power gates?
+
+## Survivability/Defeatures
+
+Does this feature include (or require) a mode to revert to behavior prior to inclusion of this feature?
+
+Describe any intended defeatures (in sufficient detail for design team to implement architectural intent) to be included for this feature. Note: this item may be a reference to the post-silicon validation section if defeatures are intended to be used for validation purposes.
+
+Does this feature require any other type of survivability feature (beyond defeatures), or expectations for survivability implemented by the integration team within the SOC?
+-->
+
+Not applicable to this feature.
+
+## Firmware
+
+<!--If this feature is adding or modifying firmware within the IP, please answer these questions.
+
+Does the feature change how or when firmware messages are sent to the SOC (i.e., sent to a primary trace aggregator (e.g. North Peak))?
+
+Does the feature likely add new types of firmware messages?
+
+If so, document which messaging standard is supported by the new messages.
+
+If not, document the custom format of the FW messages; how the IP team will support custom decode of the FW messages; and explicit agreement including an HSD ticket ID by the SSG tools team for support of this FW messaging system.
+
+Review FW messages and document new messages that are visible and available for customer (i.e., non-Intel) debug.
+
+Review flows where this FW agent interacts with drivers, IA FW, or other FW agents, and make sure that messages are set at critical check points, especially those items that are changed by this feature.
+-->
+
+ Not applicable to this feature.
+
+## Trigger
+
+<!--
+Trigger Event Table (example shown)
+
+
+| Trigger Name (to be displayed in Debug Tools) | IP Interface Signal Name | Classification (Intel-only, OxM accessible, Public) | IP Clock Name | Usage (System and/or Tester) | Additional Configuration Required (pointer to section below) |
+| :-------------------------------------------- | :----------------------- | :-------------------------------------------------- | :------------ | :--------------------------- | :----------------------------------------------------------- |
+| My event                                      | trigev[0]                | intel-only                                          | asynsc        | sysem                        | yes see 2.1.2 below                                          |
+| My other event                                | trigev[1]                | intel-only                                          | fclk          | system and tester            | yes see 2.1.3 below                                          |
+| PMON increment                                | trigev[2]                | public                                              | uclk          | system                       | no                                                           |
+
+
+
+2.1.2 Details of programming for My Event: To configure "My event", you will need to program regxxx.maskfield and regxxx.matchfield as a mask/match register.
+
+2.1.3 Details of programming of My Other Event: The signal coming into the "My other event" signal comes from a mux, which can be selected by programming regyyy.muxsel. The configuration of the switch is defined in the following table.
+
+
+| Select | Signal  |
+| :----- | :------ |
+| 0      | SignalA |
+| 1      | SignalB |
+
+Table: Event Selection
+
+
+
+2.2 Have security classifications been reviewed with security and consistent with the chassis definitions for Intel-Only, OxM, and Public (sometimes referred to as red, orange, and green) triggering?
+
+2.3 For asynchronous trigger events, are there any assumptions on duration, or are they edge detect only?
+
+3. Response Event Table (example shown)
+
+
+| Respsonse Name (to be displayed in Debug Tools) | IP Interface Signal Name | Classification (Intel-only, OxM accessible, Public) | IP Clock Name | Usage (System and/or Tester) | Additional Configuration Required (pointer to section below) |
+| :---------------------------------------------- | :----------------------- | :-------------------------------------------------- | :------------ | :--------------------------- | :----------------------------------------------------------- |
+| My event                                        | trigrsp[0]               | intel-only                                          | asynsc        | sysem                        | yes see 3.1.2 below                                          |
+| My other event                                  | trigrsp[1]               | intel-only                                          | fclk          | system and tester            | yes see 3.1.3 below                                          |
+| PMON increment                                  | trirspv[2]               | public                                              | uclk          | system                       | no                                                           |
+
+3.1.1 Details of programming for My Response: To configure "My Response", you will need to program register3 with value 0x3.
+
+3.1.2 Details of programming for My Other Response: To configure "My Other Response", you will need to program register5 with value 0x7.
+
+3.2 Have security classifications been reviewed with security and consistent with the chassis definitions for Intel-Only, OxM, and Public (sometimes referred to as red, orange, and green) triggering?
+
+3.3 For asynchronous responses, are there any assumptions on duration, or are they edge detect only?
+
+**FIXME: Not applicable to this feature.**
+-->
+
+# Registers
+
+The register addition into osxml needs to be done .
+<!--Document summary of added registers for the feature. Delta registers need to be rolled into the IP OSXML.
+
+Preliminary list of all registers and fields with associated security attributes for the feature is required for FHAS completion.
+
+**FIXME: Not applicable to this feature.**
+-->
+# Opens
+
+<!--Opens must associate with an ID number.  Once an open is created the ID must not change.
+
+Required: All opens should be resolved before FHAS completion.
+-->
+
+List of Opens:
+
+
+
+| ID   | Descriptions | Status |
+| :--- | :----------- | :----- |
+| -    |              |        |
+
+
+# Appendix
+## Software & Firmware
+
+The intent of this section is to provide a survey of potential system and software implications of the Feature implementation in a Xeon SoC in order to identify stakeholders and dependencies necessary in the productization of the IP.  It is not intended to be fully prescriptive of all system and software support required, but rather to ensure that potential impacts to existing software architectures and implementations have been considered in the high level architectural design of the feature.   It is only necessary to complete sections for which there is impact; other sections shall be marked "No Impact".  Detailed documentation of IP-specific software requirements will be found in the IP FAS document. Other software requirements will be provided in documents provided by other stakeholders.
+
+### IP Firmware Impact
+
+If this feature requires IP Firmware support, list that impact here.
+
+### SOC or Platform Firmware
+
+If this feature requires SOC or Platform Firmware support, list that impact here.  This could be BIOS, pCode, SMM, or other SOC/Platform level firmware enabling
+
+### Platform Software 
+
+If this feature requires Platform level SW support, list that impact here.  Examples would be drivers, OEM/CSP provided configuration policies, etc.
+
+#### Intel Impact
+
+#### Platform Customer and Ecosystem Impact
+
+### OS Software Impact
+
+If this feature requires OS Support, list that impact here.
+
+Required changes, including mitigations if changes are not implemented, or not available at launch.
+
+(An example would be a feature that requires OS support, but if the vendor (e.g., Microsoft) chooses to not enable the feature, or the OS release cycle doesn't align with the platform release cycle, then what would be the mitigations be.)
